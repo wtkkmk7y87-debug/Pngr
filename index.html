@@ -85,7 +85,7 @@ const affine = computeAffine(controlPoints);
  4️⃣ GPS → 画像座標
 ================================ */
 function gpsToImage(lat, lng) {
-  lat = -lat; // ★必須
+
   return {
     x: affine.a * lng + affine.b * lat + affine.c,
     y: affine.d * lng + affine.e * lat + affine.f
@@ -167,6 +167,7 @@ map.on("click", e => {
 </script>
 </body>
 </html>
+
 
 
 
