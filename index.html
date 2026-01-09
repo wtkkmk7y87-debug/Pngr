@@ -19,19 +19,16 @@ html, body {
 button {
   position: fixed;
   left: 10px;
+  top: 10px;
   z-index: 1000;
   padding: 6px 10px;
 }
-#btn-start { top: 10px; }
-#btn-goal  { top: 50px; }
 </style>
 </head>
 
 <body>
 
-<button id="btn-start">📍 現在地</button>
-<button id="btn-goal">🎯 目的地</button>
-
+<button id="btn-gps">📍 現在地取得</button>
 <div id="map"></div>
 
 <script>
@@ -49,11 +46,19 @@ const map = L.map('map', {
 L.imageOverlay('map.png', bounds).addTo(map);
 map.fitBounds(bounds);
 
-// ===== 状態 =====
-let mode = null; // "start" or "goal"
+// ===== マーカー =====
 let startMarker = null;
 let goalMarker  = null;
 let routeLine   = null;
+
+// ===== 仮：GPS → 画像座標変換 =====
+// ※ 今は「地図中央に出す」だけ
+function gpsToImage(lat, lng) {
+  return {
+    x: imageWidth  / 2,
+    y: imageHeight / 2
+  };
+}
 
 // ===== ルート描画 =====
 function drawRoute() {
@@ -70,36 +75,41 @@ function drawRoute() {
   }).addTo(map);
 }
 
-// ===== ボタン =====
-document.getElementById("btn-start").onclick = () => {
-  mode = "start";
-  alert("地図をタップして現在地を置いてください");
-};
+// ===== GPS現在地取得 =====
+document.getElementById("btn-gps").onclick = () => {
+  if (!navigator.geolocation) {
+    alert("このブラウザはGPSに対応していません");
+    return;
+  }
 
-document.getElementById("btn-goal").onclick = () => {
-  mode = "goal";
-  alert("地図をタップして目的地を置いてください");
-};
+  navigator.geolocation.getCurrentPosition(pos => {
+    const lat = pos.coords.latitude;
+    const lng = pos.coords.longitude;
 
-// ===== 地図クリック（1回だけ） =====
-map.on("click", e => {
-  if (mode === "start") {
+    const p = gpsToImage(lat, lng);
+
     if (startMarker) map.removeLayer(startMarker);
-    startMarker = L.marker(e.latlng)
-      .addTo(map)
-      .bindPopup("現在地")
-      .openPopup();
-  }
 
-  if (mode === "goal") {
-    if (goalMarker) map.removeLayer(goalMarker);
-    goalMarker = L.marker(e.latlng)
+    startMarker = L.marker([p.y, p.x])
       .addTo(map)
-      .bindPopup("目的地")
+      .bindPopup("現在地（GPS）")
       .openPopup();
-  }
 
-  mode = null; // モード解除
+    drawRoute();
+  }, () => {
+    alert("現在地を取得できませんでした");
+  });
+};
+
+// ===== 目的地：地図タップ =====
+map.on("click", e => {
+  if (goalMarker) map.removeLayer(goalMarker);
+
+  goalMarker = L.marker(e.latlng)
+    .addTo(map)
+    .bindPopup("目的地")
+    .openPopup();
+
   drawRoute();
 });
 </script>
