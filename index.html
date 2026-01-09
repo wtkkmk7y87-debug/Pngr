@@ -83,11 +83,29 @@ function setGoal() {
     drawRoadRoute();
 
   });
+ function drawRoadRoute() {
+  if (!myMarker || !goalMarker) return;
+
+  // 既存ルート削除
+  if (routeLine) map.removeLayer(routeLine);
+
+  const from = myMarker.getLatLng();
+  const to   = goalMarker.getLatLng();
+
+  routeLine = L.polyline([from, to], {
+    color: 'blue',
+    weight: 4
+  }).addTo(map);
+
+  map.fitBounds(routeLine.getBounds(), { padding: [50, 50] });
+}
+
 
 }
  
 </script>
 </body>
 </html>
+
 
 
