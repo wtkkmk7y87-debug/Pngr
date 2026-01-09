@@ -87,20 +87,7 @@ let routeLine   = null;
 /* ===============================
    5️⃣ GPS → 画像座標（正確変換）
 ================================ */
-function gpsToImage(lat, lng) {
-  const xRatio =
-    (lng - gpsTopLeft.lng) /
-    (gpsBottomRight.lng - gpsTopLeft.lng);
 
-  const yRatio =
-    (gpsTopLeft.lat - lat) /
-    (gpsTopLeft.lat - gpsBottomRight.lat);
-
-  return {
-    x: imgTopLeft.x + xRatio * (imgBottomRight.x - imgTopLeft.x),
-    y: imgTopLeft.y + yRatio * (imgBottomRight.y - imgTopLeft.y)
-  };
-}
 
 /* ===============================
    6️⃣ ルート描画
@@ -157,6 +144,7 @@ map.on("click", e => {
 
 </body>
 </html>
+
 
 
 
