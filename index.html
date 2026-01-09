@@ -77,6 +77,18 @@ const map = L.map('map', {
 L.imageOverlay('map.png', bounds).addTo(map);
 map.fitBounds(bounds);
 
+map.fitBounds(bounds);
+
+// ★ここに入れる（赤点デバッグ）
+controlPoints.forEach(p => {
+  const r = gpsToImage(p.gps.lat, p.gps.lng);
+  L.circleMarker([r.y, r.x], {
+    radius: 8,
+    color: "red"
+  }).addTo(map);
+});
+
+
 /* ===============================
    4️⃣ マーカー類
 ================================ */
@@ -144,6 +156,7 @@ map.on("click", e => {
 
 </body>
 </html>
+
 
 
 
