@@ -8,7 +8,7 @@
 <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css">
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 
-<!-- 行列計算 -->
+<!-- math.js -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/11.11.0/math.min.js"></script>
 
 <style>
@@ -35,7 +35,7 @@ html, body {
   color: white;
 }
 
-/* 状態表示 */
+/* ステータス表示 */
 #status {
   position: fixed;
   bottom: 15px;
@@ -63,8 +63,13 @@ html, body {
 }
 
 /* 📍アイコン */
-.pin {
+.pin-red {
   font-size: 48px;
+  color: red;
+}
+.pin-blue {
+  font-size: 48px;
+  color: #0066ff;
 }
 </style>
 </head>
@@ -75,8 +80,8 @@ html, body {
 <div id="status"></div>
 
 <div id="legend">
-  <div>📍・・・目的地</div>
-  <div>●・・・現在地</div>
+  <div style="color:red">📍・・・目的地</div>
+  <div style="color:#0066ff">📍・・・現在地</div>
 </div>
 
 <div id="map"></div>
@@ -89,13 +94,13 @@ const imageWidth  = 1264;
 const imageHeight = 1295;
 
 /* ===============================
-② 対応点（※成功していた値）
+② 対応点（※以前うまくいっていた値）
 ================================ */
 const controlPoints = [
   { img:{x:179,  y:1211}, gps:{lat:35.640376, lng:139.294706} },
   { img:{x:2894, y:697},  gps:{lat:35.641230, lng:139.300170} },
   { img:{x:140,  y:2262}, gps:{lat:35.638620, lng:139.294578} },
-  { img:{x:3239,y:2442}, gps:{lat:35.638278, lng:139.300813} }
+  { img:{x:3239, y:2442}, gps:{lat:35.638278, lng:139.300813} }
 ];
 
 /* ===============================
@@ -144,18 +149,25 @@ L.imageOverlay("map.jpg", bounds).addTo(map);
 map.fitBounds(bounds);
 
 /* ===============================
-⑥ マーカー
+⑥ アイコン定義
 ================================ */
-let currentMarker = null;
-let goalMarker = null;
-const status = document.getElementById("status");
-
-const pinIcon = L.divIcon({
-  className: "pin",
+const goalIcon = L.divIcon({
+  className: "pin-red",
   html: "📍",
   iconSize: [48,48],
   iconAnchor: [24,48]
 });
+
+const currentIcon = L.divIcon({
+  className: "pin-blue",
+  html: "📍",
+  iconSize: [48,48],
+  iconAnchor: [24,48]
+});
+
+let currentMarker = null;
+let goalMarker = null;
+const status = document.getElementById("status");
 
 /* ===============================
 ⑦ GPS表示
@@ -189,11 +201,8 @@ document.getElementById("gpsBtn").onclick = () => {
       status.style.display = "none";
 
       if (!currentMarker) {
-        currentMarker = L.circleMarker([p.y, p.x], {
-          radius: 8,
-          color: "blue",
-          fillColor: "blue",
-          fillOpacity: 1
+        currentMarker = L.marker([p.y, p.x], {
+          icon: currentIcon
         }).addTo(map);
       } else {
         currentMarker.setLatLng([p.y, p.x]);
@@ -205,11 +214,13 @@ document.getElementById("gpsBtn").onclick = () => {
 };
 
 /* ===============================
-⑧ 目的地（📍）
+⑧ 目的地設定
 ================================ */
 map.on("click", e => {
   if (goalMarker) map.removeLayer(goalMarker);
-  goalMarker = L.marker(e.latlng, { icon: pinIcon }).addTo(map);
+  goalMarker = L.marker(e.latlng, {
+    icon: goalIcon
+  }).addTo(map);
 });
 </script>
 
