@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <title>画像地図 × GPSナビ</title>
 
+<!-- Leaflet -->
 <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css">
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 
@@ -47,19 +48,19 @@ button {
 
 <script>
 /* ===============================
- ① 画像サイズ
+ ① 画像サイズ（←超重要）
 ================================ */
-const imageWidth  = 3312;
-const imageHeight = 3392;
+const imageWidth  = 1264;
+const imageHeight = 1295;
 
 /* ===============================
- ② 対応点（必ず正確に）
+ ② 対応点（画像座標 × GPS）
 ================================ */
 const controlPoints = [
-  { img:{x:179,  y:1211}, gps:{lat:35.640376, lng:139.294706} },
-  { img:{x:2894, y:697},  gps:{lat:35.641230, lng:139.300170} },
-  { img:{x:140,  y:2262}, gps:{lat:35.638620, lng:139.294578} },
-  { img:{x:3239, y:2442}, gps:{lat:35.638278, lng:139.300813} }
+  { img:{x:  68, y: 463}, gps:{lat:35.640376, lng:139.294706} },
+  { img:{x:1102, y: 265}, gps:{lat:35.641230, lng:139.300170} },
+  { img:{x:  53, y: 866}, gps:{lat:35.638620, lng:139.294578} },
+  { img:{x:1235, y: 934}, gps:{lat:35.638278, lng:139.300813} }
 ];
 
 /* ===============================
@@ -69,7 +70,7 @@ function computeAffine(points) {
   let A = [], B = [];
   points.forEach(p => {
     const lng = p.gps.lng;
-    const lat = -p.gps.lat; // 上下反転
+    const lat = -p.gps.lat;
     A.push([lng, lat, 1, 0, 0, 0]);
     A.push([0, 0, 0, lng, lat, 1]);
     B.push(p.img.x);
@@ -85,7 +86,6 @@ function computeAffine(points) {
     d:X[3], e:X[4], f:X[5]
   };
 }
-
 const affine = computeAffine(controlPoints);
 
 /* ===============================
@@ -108,11 +108,12 @@ const map = L.map("map", {
   minZoom: -2,
   maxZoom: 2
 });
+
 L.imageOverlay("map.jpg", bounds).addTo(map);
 map.fitBounds(bounds);
 
 /* ===============================
- ⑥ マーカー類
+ ⑥ マーカー・ルート
 ================================ */
 let startMarker = null;
 let goalMarker  = null;
@@ -134,7 +135,7 @@ const status = document.getElementById("status");
 let watchId = null;
 
 document.getElementById("btn-gps").onclick = () => {
-  if (watchId !== null) return; // 二重防止
+  if (watchId !== null) return;
 
   watchId = navigator.geolocation.watchPosition(
     pos => {
@@ -148,7 +149,6 @@ document.getElementById("btn-gps").onclick = () => {
       ) {
         status.textContent = "現在地は地図の範囲外です";
         status.style.display = "block";
-
         if (startMarker) {
           map.removeLayer(startMarker);
           startMarker = null;
@@ -167,7 +167,6 @@ document.getElementById("btn-gps").onclick = () => {
       } else {
         startMarker.setLatLng([p.y, p.x]);
       }
-
       drawRoute();
     },
     err => alert(err.message),
@@ -176,7 +175,7 @@ document.getElementById("btn-gps").onclick = () => {
 };
 
 /* ===============================
- ⑧ 目的地設定
+ ⑧ 目的地クリック
 ================================ */
 map.on("click", e => {
   if (goalMarker) map.removeLayer(goalMarker);
