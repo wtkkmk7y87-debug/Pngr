@@ -49,9 +49,22 @@ html, body {
   font-size: 16px;
 }
 
-/* 📍 */
+/* 凡例 */
+#legend {
+  position: fixed;
+  bottom: 15px;
+  right: 15px;
+  z-index: 1000;
+  background: rgba(255,255,255,0.9);
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 16px;
+  line-height: 1.6;
+}
+
+/* 📍アイコン */
 .pin {
-  font-size: 30px;
+  font-size: 48px;
 }
 </style>
 </head>
@@ -60,33 +73,39 @@ html, body {
 
 <button id="gpsBtn">📍 GPSを表示</button>
 <div id="status"></div>
+
+<div id="legend">
+  <div>📍・・・目的地</div>
+  <div>●・・・現在地</div>
+</div>
+
 <div id="map"></div>
 
 <script>
 /* ===============================
- ① 画像サイズ（map.jpgと一致）
+① 画像サイズ
 ================================ */
 const imageWidth  = 1264;
 const imageHeight = 1295;
 
 /* ===============================
- ② 対応点（※前に成功してた値）
+② 対応点（※成功していた値）
 ================================ */
 const controlPoints = [
   { img:{x:179,  y:1211}, gps:{lat:35.640376, lng:139.294706} },
-  { img:{x:2894,y:697},  gps:{lat:35.641230, lng:139.300170} },
+  { img:{x:2894, y:697},  gps:{lat:35.641230, lng:139.300170} },
   { img:{x:140,  y:2262}, gps:{lat:35.638620, lng:139.294578} },
   { img:{x:3239,y:2442}, gps:{lat:35.638278, lng:139.300813} }
 ];
 
 /* ===============================
- ③ アフィン変換計算
+③ アフィン変換
 ================================ */
 function computeAffine(points) {
   let A = [], B = [];
   points.forEach(p => {
     const lng = p.gps.lng;
-    const lat = -p.gps.lat; // 上下反転
+    const lat = -p.gps.lat;
     A.push([lng, lat, 1, 0, 0, 0]);
     A.push([0, 0, 0, lng, lat, 1]);
     B.push(p.img.x);
@@ -102,7 +121,7 @@ function computeAffine(points) {
 const affine = computeAffine(controlPoints);
 
 /* ===============================
- ④ GPS → 画像座標
+④ GPS → 画像座標
 ================================ */
 function gpsToImage(lat, lng) {
   lat = -lat;
@@ -113,7 +132,7 @@ function gpsToImage(lat, lng) {
 }
 
 /* ===============================
- ⑤ Leaflet 初期化
+⑤ Leaflet 初期化
 ================================ */
 const bounds = [[0,0],[imageHeight,imageWidth]];
 const map = L.map("map", {
@@ -125,30 +144,35 @@ L.imageOverlay("map.jpg", bounds).addTo(map);
 map.fitBounds(bounds);
 
 /* ===============================
- ⑥ マーカー
+⑥ マーカー
 ================================ */
 let currentMarker = null;
 let goalMarker = null;
 const status = document.getElementById("status");
 
-/* 📍アイコン */
 const pinIcon = L.divIcon({
   className: "pin",
   html: "📍",
-  iconSize: [30,30],
-  iconAnchor: [15,30]
+  iconSize: [48,48],
+  iconAnchor: [24,48]
 });
 
 /* ===============================
- ⑦ GPS監視
+⑦ GPS表示
 ================================ */
 document.getElementById("gpsBtn").onclick = () => {
   navigator.geolocation.watchPosition(
     pos => {
-      const { latitude, longitude } = pos.coords;
+      const { latitude, longitude, accuracy } = pos.coords;
+
+      if (accuracy > 1000) {
+        status.textContent = "この端末では正確な位置情報が取得できません";
+        status.style.display = "block";
+        return;
+      }
+
       const p = gpsToImage(latitude, longitude);
 
-      // 範囲外
       if (
         p.x < 0 || p.x > imageWidth ||
         p.y < 0 || p.y > imageHeight
@@ -162,13 +186,15 @@ document.getElementById("gpsBtn").onclick = () => {
         return;
       }
 
-      // 範囲内
       status.style.display = "none";
+
       if (!currentMarker) {
-        currentMarker = L.marker([p.y, p.x])
-          .addTo(map)
-          .bindPopup("現在地")
-          .openPopup();
+        currentMarker = L.circleMarker([p.y, p.x], {
+          radius: 8,
+          color: "blue",
+          fillColor: "blue",
+          fillOpacity: 1
+        }).addTo(map);
       } else {
         currentMarker.setLatLng([p.y, p.x]);
       }
@@ -179,14 +205,11 @@ document.getElementById("gpsBtn").onclick = () => {
 };
 
 /* ===============================
- ⑧ 目的地（📍）
+⑧ 目的地（📍）
 ================================ */
 map.on("click", e => {
   if (goalMarker) map.removeLayer(goalMarker);
-  goalMarker = L.marker(e.latlng, { icon: pinIcon })
-    .addTo(map)
-    .bindPopup("目的地")
-    .openPopup();
+  goalMarker = L.marker(e.latlng, { icon: pinIcon }).addTo(map);
 });
 </script>
 
