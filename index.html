@@ -25,54 +25,61 @@ button {
   top: 10px;
   z-index: 1000;
 }
+#status {
+  position: fixed;
+  bottom: 10px;
+  left: 10px;
+  background: rgba(0,0,0,0.7);
+  color: white;
+  padding: 6px 10px;
+  border-radius: 4px;
+  display: none;
+  z-index: 1000;
+}
 </style>
 </head>
 
 <body>
+
 <button id="btn-gps">📍 GPS現在地</button>
+<div id="status"></div>
 <div id="map"></div>
 
 <script>
 /* ===============================
- 1️⃣ 画像サイズ
+ ① 画像サイズ
 ================================ */
 const imageWidth  = 3312;
 const imageHeight = 3392;
 
 /* ===============================
- 2️⃣ 対応点（4点以上・正確に）
+ ② 対応点（4点以上・正確に）
 ================================ */
 const controlPoints = [
-  { img:{x:179,  y:1211},   gps:{lat:35.640376, lng:139.294706} }, // 左上
-  { img:{x:2894,y:697},   gps:{lat:35.641230, lng:139.300170} }, // 右上
+  { img:{x:179,  y:1211}, gps:{lat:35.640376, lng:139.294706} }, // 左上
+  { img:{x:2894, y:697},  gps:{lat:35.641230, lng:139.300170} }, // 右上
   { img:{x:140,  y:2262}, gps:{lat:35.638620, lng:139.294578} }, // 左下
-  { img:{x:3239,y:2442}, gps:{lat:35.638278, lng:139.300813} }  // 右下
+  { img:{x:3239, y:2442}, gps:{lat:35.638278, lng:139.300813} }  // 右下
 ];
 
-
 /* ===============================
- 3️⃣ アフィン変換計算
+ ③ アフィン変換計算
 ================================ */
 function computeAffine(points) {
   let A = [], B = [];
-
   points.forEach(p => {
-    const lat = -p.gps.lat; // ★超重要（上下反転）
-    const lng =  p.gps.lng;
-
+    const lng = p.gps.lng;
+    const lat = -p.gps.lat; // ★上下反転
     A.push([lng, lat, 1, 0, 0, 0]);
     A.push([0, 0, 0, lng, lat, 1]);
-
     B.push(p.img.x);
     B.push(p.img.y);
   });
-
   const AT = math.transpose(A);
   const X = math.multiply(
     math.inv(math.multiply(AT, A)),
     math.multiply(AT, B)
   );
-
   return {
     a: X[0], b: X[1], c: X[2],
     d: X[3], e: X[4], f: X[5]
@@ -82,10 +89,10 @@ function computeAffine(points) {
 const affine = computeAffine(controlPoints);
 
 /* ===============================
- 4️⃣ GPS → 画像座標
+ ④ GPS → 画像座標
 ================================ */
 function gpsToImage(lat, lng) {
-
+  lat = -lat; // ★必須
   return {
     x: affine.a * lng + affine.b * lat + affine.c,
     y: affine.d * lng + affine.e * lat + affine.f
@@ -93,7 +100,7 @@ function gpsToImage(lat, lng) {
 }
 
 /* ===============================
- 5️⃣ Leaflet 初期化
+ ⑤ Leaflet 初期化
 ================================ */
 const bounds = [[0, 0], [imageHeight, imageWidth]];
 const map = L.map("map", {
@@ -105,17 +112,17 @@ const map = L.map("map", {
 L.imageOverlay("map.jpg", bounds).addTo(map);
 map.fitBounds(bounds);
 
-/* 🔴 対応点デバッグ（必ず動く） */
+/* 🔴 対応点デバッグ表示 */
 controlPoints.forEach(p => {
   const r = gpsToImage(p.gps.lat, p.gps.lng);
   L.circleMarker([r.y, r.x], {
-    radius: 7,
+    radius: 6,
     color: "red"
   }).addTo(map);
 });
 
 /* ===============================
- 6️⃣ マーカー・ルート
+ ⑥ マーカー・ルート
 ================================ */
 let startMarker = null;
 let goalMarker  = null;
@@ -124,21 +131,34 @@ let routeLine   = null;
 function drawRoute() {
   if (!startMarker || !goalMarker) return;
   if (routeLine) map.removeLayer(routeLine);
-
-  routeLine = L.polyline([
-    startMarker.getLatLng(),
-    goalMarker.getLatLng()
-  ], { color: "blue", weight: 4 }).addTo(map);
+  routeLine = L.polyline(
+    [startMarker.getLatLng(), goalMarker.getLatLng()],
+    { color: "blue", weight: 4 }
+  ).addTo(map);
 }
 
 /* ===============================
- 7️⃣ GPS現在地
+ ⑦ GPS現在地（範囲外表示つき）
 ================================ */
+const status = document.getElementById("status");
+
 document.getElementById("btn-gps").onclick = () => {
   navigator.geolocation.getCurrentPosition(
     pos => {
       const { latitude, longitude } = pos.coords;
       const p = gpsToImage(latitude, longitude);
+
+      // ★ 範囲外チェック
+      if (
+        p.x < 0 || p.x > imageWidth ||
+        p.y < 0 || p.y > imageHeight
+      ) {
+        status.textContent = "現在地は地図の範囲外です";
+        status.style.display = "block";
+        return;
+      }
+
+      status.style.display = "none";
 
       if (startMarker) map.removeLayer(startMarker);
       startMarker = L.marker([p.y, p.x])
@@ -154,7 +174,7 @@ document.getElementById("btn-gps").onclick = () => {
 };
 
 /* ===============================
- 8️⃣ 目的地
+ ⑧ 目的地設定
 ================================ */
 map.on("click", e => {
   if (goalMarker) map.removeLayer(goalMarker);
@@ -165,11 +185,6 @@ map.on("click", e => {
   drawRoute();
 });
 </script>
+
 </body>
 </html>
-
-
-
-
-
-
