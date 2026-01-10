@@ -2,12 +2,12 @@
 <html lang="ja">
 <head>
 <meta charset="utf-8">
-<title>画像地図 × GPS ナビ（完成版）</title>
+<title>画像地図 × GPSナビ</title>
 
 <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css">
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 
-<!-- 行列計算用 -->
+<!-- 行列計算 -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/11.11.0/math.min.js"></script>
 
 <style>
@@ -21,27 +21,27 @@ html, body {
 }
 button {
   position: fixed;
-  left: 10px;
   top: 10px;
+  left: 10px;
   z-index: 1000;
 }
 #status {
   position: fixed;
   bottom: 10px;
   left: 10px;
-  background: rgba(0,0,0,0.7);
+  z-index: 1000;
+  background: rgba(0,0,0,0.75);
   color: white;
   padding: 6px 10px;
   border-radius: 4px;
   display: none;
-  z-index: 1000;
 }
 </style>
 </head>
 
 <body>
 
-<button id="btn-gps">📍 GPS現在地</button>
+<button id="btn-gps">📍 GPS開始</button>
 <div id="status"></div>
 <div id="map"></div>
 
@@ -53,13 +53,13 @@ const imageWidth  = 3312;
 const imageHeight = 3392;
 
 /* ===============================
- ② 対応点（4点以上・正確に）
+ ② 対応点（必ず正確に）
 ================================ */
 const controlPoints = [
-  { img:{x:179,  y:1211}, gps:{lat:35.640376, lng:139.294706} }, // 左上
-  { img:{x:2894, y:697},  gps:{lat:35.641230, lng:139.300170} }, // 右上
-  { img:{x:140,  y:2262}, gps:{lat:35.638620, lng:139.294578} }, // 左下
-  { img:{x:3239, y:2442}, gps:{lat:35.638278, lng:139.300813} }  // 右下
+  { img:{x:179,  y:1211}, gps:{lat:35.640376, lng:139.294706} },
+  { img:{x:2894, y:697},  gps:{lat:35.641230, lng:139.300170} },
+  { img:{x:140,  y:2262}, gps:{lat:35.638620, lng:139.294578} },
+  { img:{x:3239, y:2442}, gps:{lat:35.638278, lng:139.300813} }
 ];
 
 /* ===============================
@@ -69,7 +69,7 @@ function computeAffine(points) {
   let A = [], B = [];
   points.forEach(p => {
     const lng = p.gps.lng;
-    const lat = -p.gps.lat; // ★上下反転
+    const lat = -p.gps.lat; // 上下反転
     A.push([lng, lat, 1, 0, 0, 0]);
     A.push([0, 0, 0, lng, lat, 1]);
     B.push(p.img.x);
@@ -81,8 +81,8 @@ function computeAffine(points) {
     math.multiply(AT, B)
   );
   return {
-    a: X[0], b: X[1], c: X[2],
-    d: X[3], e: X[4], f: X[5]
+    a:X[0], b:X[1], c:X[2],
+    d:X[3], e:X[4], f:X[5]
   };
 }
 
@@ -92,7 +92,7 @@ const affine = computeAffine(controlPoints);
  ④ GPS → 画像座標
 ================================ */
 function gpsToImage(lat, lng) {
-  lat = -lat; // ★必須
+  lat = -lat;
   return {
     x: affine.a * lng + affine.b * lat + affine.c,
     y: affine.d * lng + affine.e * lat + affine.f
@@ -102,27 +102,17 @@ function gpsToImage(lat, lng) {
 /* ===============================
  ⑤ Leaflet 初期化
 ================================ */
-const bounds = [[0, 0], [imageHeight, imageWidth]];
+const bounds = [[0,0],[imageHeight,imageWidth]];
 const map = L.map("map", {
   crs: L.CRS.Simple,
   minZoom: -2,
   maxZoom: 2
 });
-
 L.imageOverlay("map.jpg", bounds).addTo(map);
 map.fitBounds(bounds);
 
-/* 🔴 対応点デバッグ表示 */
-controlPoints.forEach(p => {
-  const r = gpsToImage(p.gps.lat, p.gps.lng);
-  L.circleMarker([r.y, r.x], {
-    radius: 6,
-    color: "red"
-  }).addTo(map);
-});
-
 /* ===============================
- ⑥ マーカー・ルート
+ ⑥ マーカー類
 ================================ */
 let startMarker = null;
 let goalMarker  = null;
@@ -133,43 +123,55 @@ function drawRoute() {
   if (routeLine) map.removeLayer(routeLine);
   routeLine = L.polyline(
     [startMarker.getLatLng(), goalMarker.getLatLng()],
-    { color: "blue", weight: 4 }
+    { color:"blue", weight:4 }
   ).addTo(map);
 }
 
 /* ===============================
- ⑦ GPS現在地（範囲外表示つき）
+ ⑦ GPS監視（自動表示）
 ================================ */
 const status = document.getElementById("status");
+let watchId = null;
 
 document.getElementById("btn-gps").onclick = () => {
-  navigator.geolocation.getCurrentPosition(
+  if (watchId !== null) return; // 二重防止
+
+  watchId = navigator.geolocation.watchPosition(
     pos => {
       const { latitude, longitude } = pos.coords;
       const p = gpsToImage(latitude, longitude);
 
-      // ★ 範囲外チェック
+      // 範囲外
       if (
         p.x < 0 || p.x > imageWidth ||
         p.y < 0 || p.y > imageHeight
       ) {
         status.textContent = "現在地は地図の範囲外です";
         status.style.display = "block";
+
+        if (startMarker) {
+          map.removeLayer(startMarker);
+          startMarker = null;
+        }
         return;
       }
 
+      // 範囲内
       status.style.display = "none";
 
-      if (startMarker) map.removeLayer(startMarker);
-      startMarker = L.marker([p.y, p.x])
-        .addTo(map)
-        .bindPopup("現在地")
-        .openPopup();
+      if (!startMarker) {
+        startMarker = L.marker([p.y, p.x])
+          .addTo(map)
+          .bindPopup("現在地")
+          .openPopup();
+      } else {
+        startMarker.setLatLng([p.y, p.x]);
+      }
 
       drawRoute();
     },
     err => alert(err.message),
-    { enableHighAccuracy: true }
+    { enableHighAccuracy:true }
   );
 };
 
