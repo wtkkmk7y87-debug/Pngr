@@ -2,10 +2,11 @@
 <html lang="ja">
 <head>
 <meta charset="utf-8">
-<title>画像地図 × GPSナビ（安定版）</title>
+<title>画像地図 × GPSナビ</title>
 
 <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css">
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/11.11.0/math.min.js"></script>
 
 <style>
 html, body {
@@ -41,17 +42,6 @@ html, body {
   padding: 10px 14px;
   border-radius: 8px;
   font-size: 16px;
-  line-height: 1.6;
-}
-
-/* 📍アイコン */
-.pin-blue {
-  font-size: 48px;
-  color: #1e6fff;
-}
-.pin-red {
-  font-size: 48px;
-  color: red;
 }
 </style>
 </head>
@@ -61,8 +51,9 @@ html, body {
 <button id="gpsBtn">📍 GPSを表示</button>
 
 <div id="legend">
-  <div>🔵📍・・・現在地</div>
-  <div>🔴📍・・・目的地</div>
+  <div>🔺 現在地</div>
+  <div>🚩 目的地</div>
+  <div>― 道</div>
 </div>
 
 <div id="map"></div>
@@ -75,7 +66,43 @@ const imageWidth  = 1264;
 const imageHeight = 1295;
 
 /* ===============================
-② 地図表示（画像）
+② GPS → 画像変換（確定版）
+================================ */
+const controlPoints = [
+  { img:{x:179,y:1211}, gps:{lat:35.640376,lng:139.294706} },
+  { img:{x:2894,y:697}, gps:{lat:35.641230,lng:139.300170} },
+  { img:{x:140,y:2262}, gps:{lat:35.638620,lng:139.294578} },
+  { img:{x:3239,y:2442}, gps:{lat:35.638278,lng:139.300813} }
+];
+
+function computeAffine(points){
+  let A=[], B=[];
+  points.forEach(p=>{
+    const lng = p.gps.lng;
+    const lat = -p.gps.lat;
+    A.push([lng,lat,1,0,0,0]);
+    A.push([0,0,0,lng,lat,1]);
+    B.push(p.img.x, p.img.y);
+  });
+  const X = math.multiply(
+    math.inv(math.multiply(math.transpose(A), A)),
+    math.multiply(math.transpose(A), B)
+  );
+  return {a:X[0], b:X[1], c:X[2], d:X[3], e:X[4], f:X[5]};
+}
+
+const affine = computeAffine(controlPoints);
+
+function gpsToImage(lat, lng){
+  lat = -lat;
+  return {
+    x: affine.a*lng + affine.b*lat + affine.c,
+    y: affine.d*lng + affine.e*lat + affine.f
+  };
+}
+
+/* ===============================
+③ 地図表示
 ================================ */
 const bounds = [[0,0],[imageHeight,imageWidth]];
 const map = L.map("map", {
@@ -83,28 +110,27 @@ const map = L.map("map", {
   minZoom: -2,
   maxZoom: 2
 });
+
 L.imageOverlay("map.jpg", bounds).addTo(map);
 map.fitBounds(bounds);
 
 /* ===============================
-③ 📍アイコン
+④ アイコン（画像）
 ================================ */
-const bluePin = L.divIcon({
-  className: "pin-blue",
-  html: "📍",
-  iconSize: [48,48],
-  iconAnchor: [24,48]
+const currentIcon = L.icon({
+  iconUrl: "現在地.png",
+  iconSize: [50,50],
+  iconAnchor: [25,25]
 });
-const redPin = L.divIcon({
-  className: "pin-red",
-  html: "📍",
-  iconSize: [48,48],
-  iconAnchor: [24,48]
+
+const goalIcon = L.icon({
+  iconUrl: "目的地.jpg",
+  iconSize: [50,70],
+  iconAnchor: [25,70]
 });
 
 /* ===============================
-④ 道データ（ここに点を追加）
-※ [x, y] = 画像ピクセル座標
+⑤ 道データ（ここを増やす）
 ================================ */
 const roads = [
   [
@@ -117,40 +143,53 @@ const roads = [
     [771,821],
     [817,815],
     [997,838],
-    [1078,777]
+    [1078,777],
+    [1054,745],
+    [1049,678]
   ]
 ];
 
-// 道を描画
-roads.forEach(r => {
+roads.forEach(r=>{
   L.polyline(
     r.map(p => [p[1], p[0]]),
-    { color:"#aaa", weight:6 }
+    { color:"#999", weight:6 }
   ).addTo(map);
 });
 
 /* ===============================
-⑤ 現在地（仮：地図中央スタート）
-※ GPS変換は次の段階で入れる
+⑥ 現在地
 ================================ */
 let currentMarker = null;
 
 document.getElementById("gpsBtn").onclick = () => {
-  if (!currentMarker) {
-    currentMarker = L.marker(
-      [imageHeight/2, imageWidth/2],
-      { icon: bluePin }
-    ).addTo(map);
-  }
+  navigator.geolocation.watchPosition(pos=>{
+    const p = gpsToImage(
+      pos.coords.latitude,
+      pos.coords.longitude
+    );
+
+    if(!currentMarker){
+      currentMarker = L.marker([p.y, p.x], {
+        icon: currentIcon
+      }).addTo(map);
+    } else {
+      currentMarker.setLatLng([p.y, p.x]);
+    }
+  },
+  err => alert(err.message),
+  { enableHighAccuracy:true });
 };
 
 /* ===============================
-⑥ 目的地
+⑦ 目的地
 ================================ */
 let goalMarker = null;
-map.on("click", e => {
-  if (goalMarker) map.removeLayer(goalMarker);
-  goalMarker = L.marker(e.latlng, { icon: redPin }).addTo(map);
+
+map.on("click", e=>{
+  if(goalMarker) map.removeLayer(goalMarker);
+  goalMarker = L.marker(e.latlng, {
+    icon: goalIcon
+  }).addTo(map);
 });
 </script>
 
