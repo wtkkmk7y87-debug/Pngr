@@ -104,13 +104,13 @@ const controlPoints = [
 ];
 
 /* ===============================
-③ アフィン変換計算
+③ アフィン変換
 ================================ */
 function computeAffine(points) {
   let A = [], B = [];
   points.forEach(p => {
     const lng = p.gps.lng;
-    const lat = -p.gps.lat;   // 緯度反転
+    const lat = -p.gps.lat;
     A.push([lng, lat, 1, 0, 0, 0]);
     A.push([0, 0, 0, lng, lat, 1]);
     B.push(p.img.x);
@@ -132,10 +132,9 @@ function gpsToImage(lat, lng) {
   lat = -lat;
   const x = affine.a * lng + affine.b * lat + affine.c;
   const y = affine.d * lng + affine.e * lat + affine.f;
-
   return {
     x: x,
-    y: imageHeight - y   // 上＝北に補正
+    y: imageHeight - y   // 上＝北になるよう反転
   };
 }
 
@@ -155,7 +154,7 @@ map.fitBounds(bounds);
 ⑥ アイコン
 ================================ */
 const currentIcon = L.icon({
-  iconUrl: "current.png",   // 矢印画像
+  iconUrl: "current.png",   // 上向き矢印画像
   iconSize: [40,40],
   iconAnchor: [20,20]
 });
@@ -183,38 +182,40 @@ const meterToPixel = 1.2;
 let deviceHeading = 0; // 北=0°
 
 function startCompass() {
-  // iPhone 対応（許可が必要）
   if (
     typeof DeviceOrientationEvent !== "undefined" &&
     typeof DeviceOrientationEvent.requestPermission === "function"
   ) {
+    // iPhone
     DeviceOrientationEvent.requestPermission().then(permission => {
       if (permission === "granted") {
         window.addEventListener("deviceorientation", handleOrientation, true);
       }
     });
-  } 
-  // Androidなど
-  else {
+  } else {
+    // Android等
     window.addEventListener("deviceorientationabsolute", handleOrientation, true);
   }
 }
 
 function handleOrientation(event) {
   if (event.alpha == null) return;
-
-  // 北を0度に補正
   deviceHeading = 360 - event.alpha;
   updateArrowRotation();
 }
 
+/* ★重要：imgだけ回転させる（位置が消えない） */
 function updateArrowRotation() {
   if (!currentMarker) return;
 
   const iconEl = currentMarker.getElement();
   if (!iconEl) return;
 
-  iconEl.style.transform = `rotate(${deviceHeading}deg)`;
+  const img = iconEl.querySelector("img");
+  if (!img) return;
+
+  img.style.transform = `rotate(${deviceHeading}deg)`;
+  img.style.transformOrigin = "50% 50%";
 }
 
 /* ===============================
@@ -254,7 +255,7 @@ function startGPS() {
         currentMarker.setLatLng(currentLatLng);
       }
 
-      updateArrowRotation();   // ← 向きを反映
+      updateArrowRotation();
 
       /* GPS精度円 */
       const radiusPx = accuracy * meterToPixel;
