@@ -8,7 +8,7 @@
 <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css">
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 
-<!-- math.js（アフィン変換用） -->
+<!-- math.js -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/11.11.0/math.min.js"></script>
 
 <style>
@@ -35,13 +35,13 @@ html, body {
   color: #fff;
 }
 
-/* 状態表示 */
+/* 状態表示（右下から少し内側） */
 #status {
   position: fixed;
-  bottom: 15px;
-  left: 15px;
+  bottom: 40px;   /* ← 右下から少し離す */
+  right: 20px;
   z-index: 1000;
-  background: rgba(0,0,0,0.8);
+  background: rgba(0,0,0,0.85);
   color: #fff;
   padding: 10px 14px;
   border-radius: 8px;
@@ -49,45 +49,20 @@ html, body {
   display: none;
 }
 
-/* 凡例 */
-#legend {
-  position: fixed;
-  bottom: 15px;
-  right: 15px;
-  z-index: 1000;
-  background: rgba(255,255,255,0.9);
-  padding: 10px 14px;
-  border-radius: 8px;
-  font-size: 14px;
-  line-height: 1.6;
-}
-
 /* 📍アイコン */
-.pin-blue {
-  font-size: 48px;
-  color: #1e6fff;
-}
-.pin-red {
-  font-size: 48px;
-  color: red;
-}
+.pin-blue { font-size: 48px; color: #1e6fff; }
+.pin-red  { font-size: 48px; color: red; }
 </style>
 </head>
 
 <body>
 <button id="gpsBtn">📍 GPSを表示</button>
 <div id="status"></div>
-
-<div id="legend">
-  <div>🔵📍・・・現在地</div>
-  <div>🔴📍・・・目的地</div>
-</div>
-
 <div id="map"></div>
 
 <script>
 /* ===============================
-① 画像サイズ（map.jpgの実サイズ）
+① 画像サイズ
 ================================ */
 const imageWidth  = 3312;
 const imageHeight = 3392;
@@ -103,7 +78,7 @@ const controlPoints = [
 ];
 
 /* ===============================
-③ アフィン変換計算
+③ アフィン変換
 ================================ */
 function computeAffine(points) {
   let A = [], B = [];
@@ -121,7 +96,6 @@ function computeAffine(points) {
   );
   return { a:X[0], b:X[1], c:X[2], d:X[3], e:X[4], f:X[5] };
 }
-
 const affine = computeAffine(controlPoints);
 
 /* ===============================
@@ -148,13 +122,12 @@ L.imageOverlay("map.jpg", bounds).addTo(map);
 map.fitBounds(bounds);
 
 /* ===============================
-⑥ 📍アイコン
+⑥ 📍サイズ（ズーム対応）
 ================================ */
 function getPinSize() {
   const z = map.getZoom();
   return Math.max(32, 48 + z * 8);
 }
-
 function createPin(className) {
   const size = getPinSize();
   return L.divIcon({
@@ -169,20 +142,14 @@ let currentMarker = null;
 let goalMarker = null;
 const status = document.getElementById("status");
 
-/* ===============================
-⑦ ズーム時に📍サイズ更新
-================================ */
+/* ズーム時に📍サイズ更新 */
 map.on("zoom", () => {
-  if (currentMarker) {
-    currentMarker.setIcon(createPin("pin-blue"));
-  }
-  if (goalMarker) {
-    goalMarker.setIcon(createPin("pin-red"));
-  }
+  if (currentMarker) currentMarker.setIcon(createPin("pin-blue"));
+  if (goalMarker)   goalMarker.setIcon(createPin("pin-red"));
 });
 
 /* ===============================
-⑧ GPS表示
+⑦ GPS表示
 ================================ */
 document.getElementById("gpsBtn").onclick = () => {
   navigator.geolocation.watchPosition(
@@ -197,7 +164,7 @@ document.getElementById("gpsBtn").onclick = () => {
 
       const p = gpsToImage(latitude, longitude);
 
-      // 範囲外判定
+      /* 範囲外表示 */
       if (
         p.x < 0 || p.x > imageWidth ||
         p.y < 0 || p.y > imageHeight
@@ -222,7 +189,7 @@ document.getElementById("gpsBtn").onclick = () => {
         currentMarker.setLatLng([p.y, p.x]);
       }
     },
-    err => {
+    () => {
       status.textContent = "GPSの取得に失敗しました";
       status.style.display = "block";
     },
@@ -231,7 +198,7 @@ document.getElementById("gpsBtn").onclick = () => {
 };
 
 /* ===============================
-⑨ 目的地（タップで設定）
+⑧ 目的地（タップ）
 ================================ */
 map.on("click", e => {
   if (goalMarker) map.removeLayer(goalMarker);
