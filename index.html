@@ -2,10 +2,13 @@
 <html lang="ja">
 <head>
 <meta charset="utf-8">
-<title>画像地図 × GPSナビ</title>
+<title>画像地図 × GPSナビ（完成版）</title>
 
+<!-- Leaflet -->
 <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css">
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
+<!-- 行列計算 -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/11.11.0/math.min.js"></script>
 
 <style>
@@ -18,11 +21,11 @@ html, body {
   height: 100%;
 }
 
-/* ステータス表示（右下45px） */
+/* 状態表示（← 元の場所：左下） */
 #status {
   position: fixed;
-  right: 15px;
-  bottom: 45px;
+  left: 15px;
+  bottom: 15px;
   z-index: 1000;
   background: rgba(0,0,0,0.8);
   color: white;
@@ -39,11 +42,15 @@ html, body {
 <div id="map"></div>
 
 <script>
-/* 画像サイズ */
+/* ===============================
+① 画像サイズ
+================================ */
 const imageWidth  = 3312;
 const imageHeight = 3392;
 
-/* 対応点 */
+/* ===============================
+② 対応点（キャリブレーション）
+================================ */
 const controlPoints = [
   { img:{x:179,  y:1211}, gps:{lat:35.640376, lng:139.294706} },
   { img:{x:2894, y:697},  gps:{lat:35.641230, lng:139.300170} },
@@ -51,7 +58,9 @@ const controlPoints = [
   { img:{x:3239,y:2442}, gps:{lat:35.638278, lng:139.300813} }
 ];
 
-/* アフィン変換 */
+/* ===============================
+③ アフィン変換
+================================ */
 function computeAffine(points) {
   let A = [], B = [];
   points.forEach(p => {
@@ -71,7 +80,9 @@ function computeAffine(points) {
 }
 const affine = computeAffine(controlPoints);
 
-/* GPS → 画像座標 */
+/* ===============================
+④ GPS → 画像座標（Y反転修正済）
+================================ */
 function gpsToImage(lat, lng) {
   lat = -lat;
   const x = affine.a * lng + affine.b * lat + affine.c;
@@ -79,64 +90,126 @@ function gpsToImage(lat, lng) {
   return { x, y: imageHeight - y };
 }
 
-/* Leaflet */
+/* ===============================
+⑤ Leaflet 初期化
+================================ */
 const map = L.map("map", {
   crs: L.CRS.Simple,
   minZoom: -2,
   maxZoom: 2,
-  zoomAnimation: false   // ★ サイズ固定のため重要
+  zoomAnimation: false
 });
 const bounds = [[0,0],[imageHeight,imageWidth]];
 L.imageOverlay("map.jpg", bounds).addTo(map);
 map.fitBounds(bounds);
 
-/* アイコン（サイズ固定） */
+/* ===============================
+⑥ 手書きアイコン（サイズ固定）
+================================ */
 const currentIcon = L.icon({
   iconUrl: "current.png",
   iconSize: [40, 40],
-  iconAnchor: [20, 20]
+  iconAnchor: [20, 40]   // 下中央
 });
+
 const goalIcon = L.icon({
   iconUrl: "goal.png",
   iconSize: [48, 48],
-  iconAnchor: [24, 24]
+  iconAnchor: [24, 48]
 });
 
-/* レイヤー */
+/* ===============================
+⑦ レイヤー管理
+================================ */
 let currentMarker = null;
 let goalMarker = null;
-const status = document.getElementById("status");
+let accuracyCircle = null;
+let routeLine = null;
 
-/* GPS */
+const status = document.getElementById("status");
+const meterToPixel = 1.2;
+
+/* ===============================
+⑧ GPS（自動開始）
+================================ */
 navigator.geolocation.watchPosition(
   pos => {
-    const { latitude, longitude } = pos.coords;
+    const { latitude, longitude, accuracy } = pos.coords;
     const p = gpsToImage(latitude, longitude);
 
-    if (p.x < 0 || p.x > imageWidth || p.y < 0 || p.y > imageHeight) {
+    if (
+      p.x < 0 || p.x > imageWidth ||
+      p.y < 0 || p.y > imageHeight
+    ) {
       status.textContent = "現在地は範囲外です";
       status.style.display = "block";
       return;
     }
 
     status.style.display = "none";
-
     const ll = L.latLng(p.y, p.x);
+
+    /* 現在地 */
     if (!currentMarker) {
-      currentMarker = L.marker(ll, { icon: currentIcon }).addTo(map);
+      currentMarker = L.marker(ll, {
+        icon: currentIcon
+      }).addTo(map);
     } else {
       currentMarker.setLatLng(ll);
+    }
+
+    /* 精度円 */
+    const radiusPx = accuracy * meterToPixel;
+    if (!accuracyCircle) {
+      accuracyCircle = L.circle(ll, {
+        radius: radiusPx,
+        color: "blue",
+        weight: 1,
+        fillColor: "blue",
+        fillOpacity: 0.15
+      }).addTo(map);
+    } else {
+      accuracyCircle.setLatLng(ll);
+      accuracyCircle.setRadius(radiusPx);
+    }
+
+    /* 直線更新 */
+    if (goalMarker) {
+      drawRoute(currentMarker.getLatLng(), goalMarker.getLatLng());
     }
   },
   err => alert(err.message),
   { enableHighAccuracy: true }
 );
 
-/* 目的地 */
+/* ===============================
+⑨ 目的地（クリック）
+================================ */
 map.on("click", e => {
   if (goalMarker) map.removeLayer(goalMarker);
-  goalMarker = L.marker(e.latlng, { icon: goalIcon }).addTo(map);
+  goalMarker = L.marker(e.latlng, {
+    icon: goalIcon
+  }).addTo(map);
+
+  if (currentMarker) {
+    drawRoute(currentMarker.getLatLng(), goalMarker.getLatLng());
+  }
 });
+
+/* ===============================
+⑩ 現在地〜目的地の直線
+================================ */
+function drawRoute(from, to) {
+  if (!routeLine) {
+    routeLine = L.polyline([from, to], {
+      color: "orange",
+      weight: 4,
+      dashArray: "6,6"
+    }).addTo(map);
+  } else {
+    routeLine.setLatLngs([from, to]);
+  }
+}
 </script>
 </body>
 </html>
