@@ -59,15 +59,11 @@ html, body {
 <div id="map"></div>
 
 <script>
-/* ===============================
-① 画像サイズ
-================================ */
+/* 画像サイズ */
 const imageWidth  = 3312;
 const imageHeight = 3392;
 
-/* ===============================
-② 対応点（キャリブレーション）
-================================ */
+/* 対応点 */
 const controlPoints = [
   { img:{x:179,  y:1211}, gps:{lat:35.640376, lng:139.294706} },
   { img:{x:2894, y:697},  gps:{lat:35.641230, lng:139.300170} },
@@ -75,9 +71,7 @@ const controlPoints = [
   { img:{x:3239,y:2442}, gps:{lat:35.638278, lng:139.300813} }
 ];
 
-/* ===============================
-③ アフィン変換
-================================ */
+/* アフィン */
 function computeAffine(points) {
   let A = [], B = [];
   points.forEach(p => {
@@ -97,9 +91,7 @@ function computeAffine(points) {
 }
 const affine = computeAffine(controlPoints);
 
-/* ===============================
-④ GPS → 画像座標
-================================ */
+/* GPS → 画像座標 */
 function gpsToImage(lat, lng) {
   lat = -lat;
   const x = affine.a * lng + affine.b * lat + affine.c;
@@ -107,9 +99,7 @@ function gpsToImage(lat, lng) {
   return { x, y: imageHeight - y };
 }
 
-/* ===============================
-⑤ Leaflet 初期化
-================================ */
+/* Leaflet 初期化 */
 const bounds = [[0,0],[imageHeight,imageWidth]];
 const map = L.map("map", {
   crs: L.CRS.Simple,
@@ -120,9 +110,7 @@ const map = L.map("map", {
 L.imageOverlay("map.jpg", bounds).addTo(map);
 map.fitBounds(bounds);
 
-/* ===============================
-⑥ 固定サイズアイコン
-================================ */
+/* 固定サイズアイコン */
 function fixedIcon(url) {
   return L.divIcon({
     className: "fixed-icon",
@@ -135,9 +123,7 @@ function fixedIcon(url) {
 const currentIcon = fixedIcon("current.png");
 const goalIcon    = fixedIcon("goal.png");
 
-/* ===============================
-⑦ レイヤー
-================================ */
+/* レイヤー */
 let currentMarker = null;
 let goalMarker = null;
 let accuracyCircle = null;
@@ -146,9 +132,7 @@ let routeLine = null;
 const status = document.getElementById("status");
 const meterToPixel = 1.2;
 
-/* ===============================
-⑧ GPS（自動開始）
-================================ */
+/* GPS（自動開始） */
 navigator.geolocation.watchPosition(
   pos => {
     const { latitude, longitude, accuracy } = pos.coords;
@@ -193,9 +177,7 @@ navigator.geolocation.watchPosition(
   { enableHighAccuracy: true }
 );
 
-/* ===============================
-⑨ 目的地（クリック）
-================================ */
+/*目的地（クリック） */
 map.on("click", e => {
   if (goalMarker) map.removeLayer(goalMarker);
   goalMarker = L.marker(e.latlng, { icon: goalIcon }).addTo(map);
@@ -205,9 +187,7 @@ map.on("click", e => {
   }
 });
 
-/* ===============================
-⑩ 直線
-================================ */
+/* 直線 */
 function drawLine(a, b) {
   if (!routeLine) {
     routeLine = L.polyline([a,b], {
@@ -223,3 +203,4 @@ function drawLine(a, b) {
 
 </body>
 </html>
+
