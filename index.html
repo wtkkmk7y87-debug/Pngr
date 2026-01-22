@@ -2,13 +2,10 @@
 <html lang="ja">
 <head>
 <meta charset="utf-8">
-<title>画像地図 × GPSナビ（完成版）</title>
+<title>画像地図 × GPSナビ</title>
 
-<!-- Leaflet -->
 <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css">
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-
-<!-- 行列計算 -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/11.11.0/math.min.js"></script>
 
 <style>
@@ -16,31 +13,16 @@ html, body {
   height: 100%;
   margin: 0;
 }
-
 #map {
   width: 100%;
   height: 100%;
 }
 
-/* GPS再取得ボタン */
-#gpsBtn {
-  position: fixed;
-  top: 15px;
-  left: 15px;
-  z-index: 1000;
-  font-size: 18px;
-  padding: 10px 16px;
-  border-radius: 10px;
-  border: none;
-  background: #2c7be5;
-  color: white;
-}
-
-/* 範囲外表示（右下基準・下に45px） */
+/* ステータス表示（右下45px） */
 #status {
   position: fixed;
   right: 15px;
-  bottom: 60px; /* 15px + 45px */
+  bottom: 45px;
   z-index: 1000;
   background: rgba(0,0,0,0.8);
   color: white;
@@ -53,20 +35,15 @@ html, body {
 </head>
 
 <body>
-<button id="gpsBtn">📍 GPS再取得</button>
 <div id="status"></div>
 <div id="map"></div>
 
 <script>
-/* ===============================
-① 画像サイズ
-================================ */
+/* 画像サイズ */
 const imageWidth  = 3312;
 const imageHeight = 3392;
 
-/* ===============================
-② 対応点（キャリブレーション）
-================================ */
+/* 対応点 */
 const controlPoints = [
   { img:{x:179,  y:1211}, gps:{lat:35.640376, lng:139.294706} },
   { img:{x:2894, y:697},  gps:{lat:35.641230, lng:139.300170} },
@@ -74,9 +51,7 @@ const controlPoints = [
   { img:{x:3239,y:2442}, gps:{lat:35.638278, lng:139.300813} }
 ];
 
-/* ===============================
-③ アフィン変換計算
-================================ */
+/* アフィン変換 */
 function computeAffine(points) {
   let A = [], B = [];
   points.forEach(p => {
@@ -96,154 +71,72 @@ function computeAffine(points) {
 }
 const affine = computeAffine(controlPoints);
 
-/* ===============================
-④ GPS → 画像座標
-================================ */
+/* GPS → 画像座標 */
 function gpsToImage(lat, lng) {
   lat = -lat;
   const x = affine.a * lng + affine.b * lat + affine.c;
   const y = affine.d * lng + affine.e * lat + affine.f;
-  return {
-    x: x,
-    y: imageHeight - y
-  };
+  return { x, y: imageHeight - y };
 }
 
-/* ===============================
-⑤ Leaflet 初期化
-================================ */
-const bounds = [[0,0],[imageHeight,imageWidth]];
+/* Leaflet */
 const map = L.map("map", {
   crs: L.CRS.Simple,
   minZoom: -2,
-  maxZoom: 2
+  maxZoom: 2,
+  zoomAnimation: false   // ★ サイズ固定のため重要
 });
+const bounds = [[0,0],[imageHeight,imageWidth]];
 L.imageOverlay("map.jpg", bounds).addTo(map);
 map.fitBounds(bounds);
 
-/* ===============================
-⑥ アイコン
-================================ */
+/* アイコン（サイズ固定） */
 const currentIcon = L.icon({
   iconUrl: "current.png",
-  iconSize: [40,40],
-  iconAnchor: [20,20]
+  iconSize: [40, 40],
+  iconAnchor: [20, 20]
 });
-
 const goalIcon = L.icon({
   iconUrl: "goal.png",
-  iconSize: [48,48],
-  iconAnchor: [24,24]
+  iconSize: [48, 48],
+  iconAnchor: [24, 24]
 });
 
-/* ===============================
-⑦ レイヤー管理
-================================ */
+/* レイヤー */
 let currentMarker = null;
 let goalMarker = null;
-let accuracyCircle = null;
-let routeLine = null;
-
 const status = document.getElementById("status");
-const meterToPixel = 1.2;
 
-/* ===============================
-⑧ GPS処理
-================================ */
-function startGPS() {
-  navigator.geolocation.watchPosition(
-    pos => {
-      const { latitude, longitude, accuracy } = pos.coords;
+/* GPS */
+navigator.geolocation.watchPosition(
+  pos => {
+    const { latitude, longitude } = pos.coords;
+    const p = gpsToImage(latitude, longitude);
 
-      if (accuracy > 1000) {
-        status.textContent = "GPS精度が低すぎます";
-        status.style.display = "block";
-        return;
-      }
+    if (p.x < 0 || p.x > imageWidth || p.y < 0 || p.y > imageHeight) {
+      status.textContent = "現在地は範囲外です";
+      status.style.display = "block";
+      return;
+    }
 
-      const p = gpsToImage(latitude, longitude);
+    status.style.display = "none";
 
-      if (
-        p.x < 0 || p.x > imageWidth ||
-        p.y < 0 || p.y > imageHeight
-      ) {
-        status.textContent = "現在地は地図の範囲外です";
-        status.style.display = "block";
-        return;
-      }
+    const ll = L.latLng(p.y, p.x);
+    if (!currentMarker) {
+      currentMarker = L.marker(ll, { icon: currentIcon }).addTo(map);
+    } else {
+      currentMarker.setLatLng(ll);
+    }
+  },
+  err => alert(err.message),
+  { enableHighAccuracy: true }
+);
 
-      status.style.display = "none";
-
-      const currentLatLng = L.latLng(p.y, p.x);
-
-      if (!currentMarker) {
-        currentMarker = L.marker(currentLatLng, {
-          icon: currentIcon
-        }).addTo(map);
-      } else {
-        currentMarker.setLatLng(currentLatLng);
-      }
-
-      const radiusPx = accuracy * meterToPixel;
-      if (!accuracyCircle) {
-        accuracyCircle = L.circle(currentLatLng, {
-          radius: radiusPx,
-          color: "blue",
-          weight: 1,
-          fillColor: "blue",
-          fillOpacity: 0.15
-        }).addTo(map);
-      } else {
-        accuracyCircle.setLatLng(currentLatLng);
-        accuracyCircle.setRadius(radiusPx);
-      }
-
-      if (goalMarker) {
-        drawRouteLine(currentLatLng, goalMarker.getLatLng());
-      }
-    },
-    err => alert(err.message),
-    { enableHighAccuracy: true }
-  );
-}
-
-/* ===============================
-⑨ 目的地クリック
-================================ */
+/* 目的地 */
 map.on("click", e => {
   if (goalMarker) map.removeLayer(goalMarker);
-  goalMarker = L.marker(e.latlng, {
-    icon: goalIcon
-  }).addTo(map);
-
-  if (currentMarker) {
-    drawRouteLine(
-      currentMarker.getLatLng(),
-      goalMarker.getLatLng()
-    );
-  }
+  goalMarker = L.marker(e.latlng, { icon: goalIcon }).addTo(map);
 });
-
-/* ===============================
-⑩ 直線ルート
-================================ */
-function drawRouteLine(from, to) {
-  if (routeLine) {
-    routeLine.setLatLngs([from, to]);
-  } else {
-    routeLine = L.polyline([from, to], {
-      color: "orange",
-      weight: 4,
-      dashArray: "6,6"
-    }).addTo(map);
-  }
-}
-
-/* ===============================
-⑪ 起動
-================================ */
-window.addEventListener("load", startGPS);
-document.getElementById("gpsBtn").onclick = startGPS;
 </script>
 </body>
 </html>
