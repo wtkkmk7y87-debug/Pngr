@@ -2,10 +2,14 @@
 <html lang="ja">
 <head>
 <meta charset="utf-8">
-<title>画像地図 × GPSナビ</title>
+<title>画像地図 × GPSナビ（完成版）</title>
+  
 
+<!-- Leaflet -->
 <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css">
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
+<!-- math.js -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/11.11.0/math.min.js"></script>
 
 <style>
@@ -19,14 +23,16 @@ html, body {
   height: 100%;
 }
 
+/* 地図外を白 */
 .leaflet-container {
   background: white !important;
 }
 
+/* 範囲外メッセージ（右下から少し上） */
 #status {
   position: fixed;
   right: 15px;
-  bottom: 60px;
+  bottom: 60px;   /* ← 右下点から下に45px以上離す */
   z-index: 1000;
   background: rgba(0,0,0,0.8);
   color: white;
@@ -36,20 +42,7 @@ html, body {
   display: none;
 }
 
-#startBtn {
-  position: fixed;
-  top: 15px;
-  left: 15px;
-  z-index: 1000;
-  padding: 10px 15px;
-  border-radius: 8px;
-  border: none;
-  background: #007aff;
-  color: white;
-  font-size: 14px;
-  cursor: pointer;
-}
-
+/* ズームしてもサイズ固定のアイコン */
 .fixed-icon img {
   width: 40px;
   height: 40px;
@@ -59,13 +52,10 @@ html, body {
 </head>
 
 <body>
-
-<button id="startBtn">現在地を取得</button>
 <div id="status">現在地は地図の範囲外です</div>
 <div id="map"></div>
 
 <script>
-
 /* ===============================
 ① 画像サイズ
 ================================ */
@@ -105,15 +95,21 @@ function computeAffine(points) {
 
 const affine = computeAffine(controlPoints);
 
+/* ===============================
+④ GPS → 画像座標
+================================ */
 function gpsToImage(lat, lng) {
   lat = -lat;
   const x = affine.a * lng + affine.b * lat + affine.c;
   const y = affine.d * lng + affine.e * lat + affine.f;
-  return { x, y: imageHeight - y };
+  return {
+    x,
+    y: imageHeight - y
+  };
 }
 
 /* ===============================
-④ Leaflet 初期化
+⑤ Leaflet 初期化
 ================================ */
 const bounds = [[0,0],[imageHeight,imageWidth]];
 const map = L.map("map", {
@@ -126,14 +122,14 @@ L.imageOverlay("map.jpg", bounds).addTo(map);
 map.fitBounds(bounds);
 
 /* ===============================
-⑤ アイコン
+⑥ 固定サイズ・下基準アイコン
 ================================ */
 function fixedFlagIcon(url) {
   return L.divIcon({
     className: "fixed-icon",
     html: `<img src="${url}">`,
     iconSize: [40,40],
-    iconAnchor: [20,40]
+    iconAnchor: [20,40] // ★ X中央 / Yは一番下（棒の先端）
   });
 }
 
@@ -141,75 +137,67 @@ const currentIcon = fixedFlagIcon("current.png");
 const goalIcon    = fixedFlagIcon("goal.png");
 
 /* ===============================
-⑥ レイヤー
+⑦ レイヤー
 ================================ */
 let currentMarker = null;
 let goalMarker = null;
 let accuracyCircle = null;
 let routeLine = null;
+
 const status = document.getElementById("status");
 const meterToPixel = 1.2;
 
 /* ===============================
-⑦ GPS開始（Safari対応）
+⑧ GPS（自動開始）
 ================================ */
-document.getElementById("startBtn").addEventListener("click", () => {
+navigator.geolocation.watchPosition(
+  pos => {
+    const { latitude, longitude, accuracy } = pos.coords;
+    const p = gpsToImage(latitude, longitude);
 
-  if (!navigator.geolocation) {
-    alert("このブラウザは位置情報に対応していません");
-    return;
-  }
+    if (
+      p.x < 0 || p.x > imageWidth ||
+      p.y < 0 || p.y > imageHeight
+    ) {
+      status.style.display = "block";
+      return;
+    }
 
-  navigator.geolocation.watchPosition(
-    pos => {
-      const { latitude, longitude, accuracy } = pos.coords;
-      const p = gpsToImage(latitude, longitude);
+    status.style.display = "none";
+    const ll = L.latLng(p.y, p.x);
 
-      if (
-        p.x < 0 || p.x > imageWidth ||
-        p.y < 0 || p.y > imageHeight
-      ) {
-        status.style.display = "block";
-        return;
-      }
+    /* 現在地 */
+    if (!currentMarker) {
+      currentMarker = L.marker(ll, { icon: currentIcon }).addTo(map);
+    } else {
+      currentMarker.setLatLng(ll);
+    }
 
-      status.style.display = "none";
-      const ll = L.latLng(p.y, p.x);
+    /* 精度円 */
+    const r = accuracy * meterToPixel;
+    if (!accuracyCircle) {
+      accuracyCircle = L.circle(ll, {
+        radius: r,
+        color: "blue",
+        fillColor: "blue",
+        fillOpacity: 0.15,
+        weight: 1
+      }).addTo(map);
+    } else {
+      accuracyCircle.setLatLng(ll);
+      accuracyCircle.setRadius(r);
+    }
 
-      if (!currentMarker) {
-        currentMarker = L.marker(ll, { icon: currentIcon }).addTo(map);
-      } else {
-        currentMarker.setLatLng(ll);
-      }
-
-      const r = accuracy * meterToPixel;
-      if (!accuracyCircle) {
-        accuracyCircle = L.circle(ll, {
-          radius: r,
-          color: "blue",
-          fillColor: "blue",
-          fillOpacity: 0.15,
-          weight: 1
-        }).addTo(map);
-      } else {
-        accuracyCircle.setLatLng(ll);
-        accuracyCircle.setRadius(r);
-      }
-
-      if (goalMarker) {
-        drawLine(currentMarker.getLatLng(), goalMarker.getLatLng());
-      }
-    },
-    err => {
-      alert("位置情報エラー: " + err.message);
-    },
-    { enableHighAccuracy: true }
-  );
-
-});
+    if (goalMarker) {
+      drawLine(currentMarker.getLatLng(), goalMarker.getLatLng());
+    }
+  },
+  err => alert(err.message),
+  { enableHighAccuracy: true }
+);
 
 /* ===============================
-⑧ 目的地クリック
+⑨ 目的地（タップ）
 ================================ */
 map.on("click", e => {
   if (goalMarker) map.removeLayer(goalMarker);
@@ -221,7 +209,7 @@ map.on("click", e => {
 });
 
 /* ===============================
-⑨ ルート描画
+⑩ 直線ルート
 ================================ */
 function drawLine(a, b) {
   if (!routeLine) {
@@ -234,7 +222,6 @@ function drawLine(a, b) {
     routeLine.setLatLngs([a,b]);
   }
 }
-
 </script>
 </body>
 </html>
