@@ -51,15 +51,11 @@ html, body {
 <div id="map"></div>
 
 <script>
-/* ===============================
-① 画像サイズ
-================================ */
+/* ① 画像サイズ*/
 const imageWidth  = 3312;
 const imageHeight = 3392;
 
-/* ===============================
-② 対応点
-================================ */
+/* ② 対応点 */
 const controlPoints = [
   { img:{x:179,y:1211}, gps:{lat:35.640376,lng:139.294706} },
   { img:{x:2894,y:697}, gps:{lat:35.641230,lng:139.300170} },
@@ -67,9 +63,7 @@ const controlPoints = [
   { img:{x:3239,y:2442}, gps:{lat:35.638278,lng:139.300813} }
 ];
 
-/* ===============================
-③ アフィン変換
-================================ */
+/* ③ アフィン変換 */
 function computeAffine(points){
   let A=[],B=[];
   points.forEach(p=>{
@@ -88,9 +82,7 @@ function computeAffine(points){
 }
 const affine=computeAffine(controlPoints);
 
-/* ===============================
-④ GPS→画像
-================================ */
+/* ④ GPS→画像 */
 function gpsToImage(lat,lng){
   lat=-lat;
   const x=affine.a*lng+affine.b*lat+affine.c;
@@ -98,17 +90,13 @@ function gpsToImage(lat,lng){
   return {x,y:imageHeight-y};
 }
 
-/* ===============================
-⑤ Leaflet
-================================ */
+/* ⑤ Leaflet */
 const bounds=[[0,0],[imageHeight,imageWidth]];
 const map=L.map("map",{crs:L.CRS.Simple,minZoom:-2,maxZoom:2});
 L.imageOverlay("map.jpg",bounds).addTo(map);
 map.fitBounds(bounds);
 
-/* ===============================
-⑥ 旗アイコン（棒の先端を中心）
-================================ */
+/* ⑥ 旗アイコン（棒の先端を中心） */
 function fixedFlagIcon(url){
   return L.divIcon({
     className:"fixed-icon",
@@ -120,9 +108,7 @@ function fixedFlagIcon(url){
 const currentIcon=fixedFlagIcon("current.png");
 const goalIcon=fixedFlagIcon("goal.png");
 
-/* ===============================
-⑦ レイヤー
-================================ */
+/* ⑦ レイヤー */
 let currentMarker=null;
 let goalMarker=null;
 let accuracyCircle=null;
@@ -132,9 +118,7 @@ let gpsStarted=false;
 const status=document.getElementById("status");
 const meterToPixel=1.2;
 
-/* ===============================
-⑧ GPS開始関数
-================================ */
+/* ⑧ GPS開始 */
 function startGPS(){
   if(gpsStarted) return;
   gpsStarted=true;
@@ -184,9 +168,7 @@ function startGPS(){
   );
 }
 
-/* ===============================
-⑨ 画面タップでGPS開始（スマホ対策）
-================================ */
+/* ⑨ 画面タップでGPS開始（スマホ対策） */
 map.once("click",startGPS);
 
 /* ===============================
@@ -201,9 +183,7 @@ map.on("click",e=>{
   }
 });
 
-/* ===============================
-⑪ 直線
-================================ */
+/* ⑪ 直線 */
 function drawLine(a,b){
   if(!routeLine){
     routeLine=L.polyline([a,b],{
@@ -219,3 +199,4 @@ function drawLine(a,b){
 
 </body>
 </html>
+
